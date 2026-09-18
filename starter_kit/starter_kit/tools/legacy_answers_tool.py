@@ -9,30 +9,26 @@ NO reescribas la herramienta cambiando su propósito: debe seguir devolviendo
 las respuestas de un workspace enriquecidas con el texto de su fuente.
 """
 
-import json
-from pathlib import Path
+import logging
 
-from shared.clients import DatabaseClient
+from shared.clients import get_db_client
 
+logger = logging.getLogger(__name__)
 
-async def get_workspace_answers(workspace_id, cache={}, min_similitud=0.0):
-    if workspace_id in cache:
-        return cache[workspace_id]
-
-    db = DatabaseClient()
-
+async def get_workspace_answers(workspace_id, min_similitud=0.0):
+    """Return call-local, workspace-filtered answers with source metadata."""
+    db = get_db_client()
     answers = await db.table("answers").where("workspace_id", workspace_id).get()
+    sources = await db.table("sources").get()
+    titles = {source.id: source.to_dict()["titulo"] for source in sources}
 
     result = []
-    for a in answers:
-        data = a.to_dict()
-        source = await db.table("sources").item(data["source_id"]).get()
-        data["fuente_titulo"] = source.to_dict()["titulo"]
+    for answer in answers:
+        data = answer.to_dict()
+        data["fuente_titulo"] = titles.get(data["source_id"])
+        if data["fuente_titulo"] is None:
+            logger.warning("missing source %s for legacy answer", data["source_id"])
         data["confianza"] = {True: "alta", False: "baja"}[data["similitud"] > 0.8]
         if data["similitud"] >= min_similitud:
             result.append(data)
-
-    Path("/tmp/last_answers.json").write_text(json.dumps(result))
-
-    cache[workspace_id] = result
     return result

@@ -13,6 +13,7 @@ Necesitamos una guardia en código.
 from __future__ import annotations
 
 import logging
+from threading import Lock
 
 logger = logging.getLogger(__name__)
 
@@ -46,13 +47,31 @@ class LoopGuard:
     """
 
     def __init__(self, max_calls: int = MAX_CALLS):
-        raise NotImplementedError("EJERCICIO 5")
+        self.max_calls = max_calls
+        self._counts: dict[tuple[str, str], int] = {}
+        self._lock = Lock()
 
     def record(self, session_id: str, agent_name: str) -> int:
-        raise NotImplementedError("EJERCICIO 5")
+        key = (session_id, agent_name)
+        # The lock covers only state mutation and makes each attempt atomic.
+        with self._lock:
+            count = self._counts[key] = self._counts.get(key, 0) + 1
+        if count > self.max_calls:
+            raise ToolLoopError(
+                f"tool loop: session={session_id}, agent={agent_name}, count={count}"
+            )
+        return count
 
     def reset(self, session_id: str) -> None:
-        raise NotImplementedError("EJERCICIO 5")
+        with self._lock:
+            self._counts = {
+                key: count for key, count in self._counts.items() if key[0] != session_id
+            }
 
     def snapshot(self, session_id: str) -> dict[str, int]:
-        raise NotImplementedError("EJERCICIO 5")
+        with self._lock:
+            return {
+                agent: count
+                for (session, agent), count in self._counts.items()
+                if session == session_id
+            }
