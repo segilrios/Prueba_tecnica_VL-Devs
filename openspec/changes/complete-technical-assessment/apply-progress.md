@@ -97,3 +97,41 @@ All eight protected-file hashes matched their pre-implementation values after th
 - Work unit: slice-4-delivery-evidence-remediation
 - Intended base: PR 3 commit `1a97c08`
 - Review budget: 400 authored changed lines; both remediation evidence requirements passed.
+
+## Verification-Coverage Remediation
+
+- [x] Evidence-verification runtime coverage — created `tools/evidence_verifier.py`
+  (stdlib-only executable form of the `verificador_v2.md` validity-first policy)
+  and `tests/test_evidence_verification.py` with five passing tests: nonexistent
+  high-score source rejected, valid evidence decided by score, exact 0.55/0.75
+  boundaries, missing-chunk doubtful, and `a-1`..`a-5` strict-JSON verdicts
+  (`APROBADO`, `RECHAZADO`, `APROBADO`, `RECHAZADO`, `DUDOSO`).
+- [x] Delivery-record runtime coverage — created
+  `tests/test_assessment_delivery_record.py` with five passing tests matching the
+  five scenario headings (protected diff/dependencies, NOTAS audit, clean-clone
+  evidence, failure/remaining-work reporting, screenshot PNG plus incremental
+  history). Added the structured timing-availability table to `NOTAS.md` with
+  explicit `Not available` facts for the start timestamp and per-exercise
+  timings; no history was fabricated.
+- [x] Prescribed three-verdict console coverage — created
+  `tests/test_consultation_prescribed.py`, which runs the three prescribed
+  questions through the real `consultar()` pipeline and proves
+  `APROBADO` (Pro/acme, 1.00), `DUDOSO` (invitation/globex, 0.58), and
+  `SIN_EVIDENCIA` (Enterprise/globex, 0.54 with `respuesta: None`).
+- [x] No completed task was unchecked; `tasks.md` still shows 18/18 complete.
+  Protected files rechecked unchanged (`git diff --quiet 5d2feb4..HEAD`
+  exit 0 over all protected paths); no dependency added; no product behavior
+  of existing modules changed.
+
+## Work Unit Evidence — Verification-Coverage Remediation
+
+| Evidence | Result |
+|---|---|
+| Focused test command and exact result | `starter_kit/starter_kit/.venv/bin/python -m pytest` → exit 0: `56 passed in 0.21s` (45 pre-existing + 11 new). |
+| Runtime harness command/scenario and exact result | Real `consultar()` pipeline for the three prescribed questions returned `APROBADO` at `1.00`, `DUDOSO` at `0.58`, and `SIN_EVIDENCIA` at `0.54` with `respuesta: null`; delivery tests read the live repo (NOTAS.md, PNG bytes, `git log 5d2feb4..HEAD`). |
+| Rollback boundary | Revert only `tools/evidence_verifier.py`, `tests/test_evidence_verification.py`, `tests/test_consultation_prescribed.py`, `tests/test_assessment_delivery_record.py`, the `NOTAS.md` timing table, and this progress section. Prior work units are untouched. |
+
+- Strategy: `feature-branch-chain`
+- Work unit: verification-coverage-remediation
+- Intended base: PR 4 delivery-evidence state on `feature/assessment-core`
+- Review budget: 400 authored changed lines; this slice adds ~380 lines (new verifier, three test files, NOTAS table, progress evidence).

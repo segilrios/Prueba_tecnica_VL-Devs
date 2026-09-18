@@ -90,6 +90,17 @@ No se capturó una duración de arranque o de consulta por separado; esa métric
 no está disponible en esta ejecución. El único tiempo medido por el comando fue
 el de la suite local (`0.20s`).
 
+### Disponibilidad de tiempos (hechos estructurados)
+
+| Hecho | Valor |
+|---|---|
+| Assessment start timestamp | Not available — the exact session start time was not captured. |
+| Per-exercise durations | Not available — time was not measured per exercise. |
+| App startup / per-query durations | Not available — startup and query durations were not timed separately. |
+| Suite wall time (recorded run) | `0.20s` for `45 passed` in the recorded local run; later runs vary and are reported with their own command output. |
+| Screenshot capture timestamp | `2026-09-18T08:41:44-05:00` (observed). |
+| Fresh-clone verification finish | `2026-09-18T08:41:44-05:00` (observed); the clone session start was not captured and is Not available. |
+
 ### Captura Enterprise `SIN_EVIDENCIA`
 
 Referencia requerida: [`evidence/enterprise-sin-evidencia.png`](evidence/enterprise-sin-evidencia.png).
