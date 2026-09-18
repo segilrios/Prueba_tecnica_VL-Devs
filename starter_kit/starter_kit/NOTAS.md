@@ -94,32 +94,60 @@ el de la suite local (`0.20s`).
 
 Referencia requerida: [`evidence/enterprise-sin-evidencia.png`](evidence/enterprise-sin-evidencia.png).
 
-**No disponible.** Se intentó crearla con el Firefox local ya instalado:
+Captura real completada el `2026-09-18T08:41:44-05:00`. Se instaló Playwright
+en el `.venv` existente desde PyPI y Firefox mediante el proveedor oficial de
+Playwright. Con la aplicación local iniciada y detenida mediante un proceso
+acotado, Playwright cargó la consola, escribió la pregunta, seleccionó
+`globex`, pulsó el botón **Preguntar**, esperó el motivo renderizado y capturó
+la página completa.
 
 ```text
-firefox --headless --screenshot evidence/enterprise-sin-evidencia.png --window-size 1280,900 'http://127.0.0.1:8000/api/consulta?q=%C2%BFQu%C3%A9%20incluye%20el%20plan%20Enterprise%3F&ws=globex'
+.venv/bin/python -m pip install playwright
+.venv/bin/python -m playwright install firefox
+.venv/bin/python -c "... page.locator('#q').fill('¿Qué incluye el plan Enterprise?'); page.locator('#ws').select_option('globex'); page.locator('button[type=submit]').click(); page.locator('text=Similitud 0.54, por debajo del mínimo de 0.55.').wait_for(state='visible'); page.screenshot(path='evidence/enterprise-sin-evidencia.png', full_page=True)"
 ```
 
-El proceso terminó con salida `0`, pero no creó el archivo. No había una
-herramienta local de automatización de navegador disponible para cargar la
-consola y enviar la pregunta antes de capturarla. No se generó una imagen
-sustitutiva ni se marcó esta evidencia como completada.
+Resultado observado: salida `0`; `evidence/enterprise-sin-evidencia.png` fue
+creado con `54,598` bytes. `file` lo identificó como PNG RGBA de `1280 x 900`.
+La validación de DOM confirmó la pregunta y el motivo
+`Similitud 0.54, por debajo del mínimo de 0.55.` con el estado
+`SIN_EVIDENCIA` visible. No se usó JSON crudo, un mock ni una imagen generada
+manualmente.
 
 ### Verificación desde clon local nuevo
 
-Se creó `/tmp/complete-technical-assessment-clone` mediante `git clone --no-local`
-apuntando exclusivamente al repositorio local actual. Se recreó el entorno
-virtual sin acceder a índices remotos. La instalación no pudo completarse:
-el nuevo entorno no contenía `pytest` ni `pytest_asyncio`, por lo que
-`.venv/bin/python -m pytest` terminó con `No module named pytest`.
+Se recreó `/tmp/complete-technical-assessment-clone` exclusivamente desde el
+repositorio local actual con `git clone --no-local`. Se creó un `.venv` propio
+del clon y se instaló `requirements.txt` desde PyPI. La marca de inicio exacta
+no fue capturada por la sesión anterior; la finalización de esta remediación
+queda registrada como `2026-09-18T08:41:44-05:00` y los tiempos observados se
+indican donde estuvieron disponibles.
 
-Aun así, el arranque acotado y las mismas tres consultas de API en ese clon
-produjeron exactamente los resultados `APROBADO` (`1.00`), `DUDOSO` (`0.58`) y
-`SIN_EVIDENCIA` (`0.54`) detallados arriba. Esta limitación es de preparación
+```text
+rm -rf /tmp/complete-technical-assessment-clone
+git clone --no-local /home/sergiog/Desktop/Prueba_tecnica /tmp/complete-technical-assessment-clone
+/home/sergiog/Desktop/Prueba_tecnica/starter_kit/starter_kit/.venv/bin/python -m venv /tmp/complete-technical-assessment-clone/starter_kit/starter_kit/.venv
+/tmp/complete-technical-assessment-clone/starter_kit/starter_kit/.venv/bin/python -m pip install -r /tmp/complete-technical-assessment-clone/starter_kit/starter_kit/requirements.txt
+/tmp/complete-technical-assessment-clone/starter_kit/starter_kit/.venv/bin/python -m pytest /tmp/complete-technical-assessment-clone/starter_kit/starter_kit/tests
+```
+
+Resultado observado: instalación correcta y `45 passed in 0.27s`. Después se
+inició de forma acotada
+`/tmp/complete-technical-assessment-clone/starter_kit/starter_kit/.venv/bin/python /tmp/complete-technical-assessment-clone/starter_kit/starter_kit/app.py`
+en `127.0.0.1:8000`, se ejecutaron las tres consultas prescritas por
+`/api/consulta` y se detuvo el proceso. Los resultados fueron `APROBADO`
+(`1.00`) para Pro/acme, `DUDOSO` (`0.58`) para invitación/globex y
+`SIN_EVIDENCIA` (`0.54`, `respuesta: null`) para Enterprise/globex. Tras cada
+escenario, y al cierre final, el puerto 8000 quedó sin servicio.
+
+### Integridad final
+
+El commit de línea base `5d2feb41996e6e568e70129cb00d6e4e1caf4fcd` sigue siendo
+ancestro de `HEAD`. Se recalcularon los ocho hashes protegidos y todos
+coincidieron con el registro inicial de `apply-progress.md`; no se modificaron
+clientes, recuperador, fixtures, prueba clasificadora base, configuración de
+pytest, dependencias ni el verificador v1.
 
 ## Trabajo pendiente
 
-1. Obtener una captura real de la consola ya enviada para la pregunta
-   Enterprise y guardarla en `evidence/enterprise-sin-evidencia.png`.
-2. En un entorno autorizado con dependencias disponibles, instalar
-   `requirements.txt` en el clon nuevo y repetir la suite completa de pytest.
+No queda trabajo pendiente para la evidencia de entrega.
