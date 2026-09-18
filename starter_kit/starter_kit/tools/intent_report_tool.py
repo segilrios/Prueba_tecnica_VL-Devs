@@ -13,6 +13,9 @@ from __future__ import annotations
 
 import logging
 
+from config.intents import UNKNOWN, classify_intent
+from shared import clients
+
 logger = logging.getLogger(__name__)
 
 
@@ -46,4 +49,26 @@ async def count_messages_by_intent(workspace_id: str) -> dict[str, int]:
     Returns:
         Diccionario `{intencion: conteo}`.
     """
-    raise NotImplementedError("EJERCICIO 2")
+    db = clients.get_db_client()
+    storage = clients.get_storage_client()
+
+    active_records = await db.table("intents").where("active", True).get()
+    active_intents = {record.id for record in active_records}
+
+    # Missing workspaces remain distinguishable: StorageClient's KeyError is
+    # deliberately propagated instead of manufacturing an all-zero report.
+    messages = await storage.list_messages(workspace_id)
+    counts = {intent: 0 for intent in active_intents}
+    counts[UNKNOWN] = 0
+
+    for message in messages:
+        intent = classify_intent(message)
+        counts[intent if intent in active_intents else UNKNOWN] += 1
+
+    logger.info(
+        "intent report completed workspace=%s messages=%d counts=%s",
+        workspace_id,
+        len(messages),
+        counts,
+    )
+    return counts

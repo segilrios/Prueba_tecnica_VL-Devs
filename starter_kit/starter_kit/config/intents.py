@@ -12,6 +12,8 @@ EJERCICIO 1: implementa `classify_intent`. No modifiques `INTENTS`.
 
 from __future__ import annotations
 
+import unicodedata
+
 # ---------------------------------------------------------------------------
 # Catálogo. NO MODIFICAR.
 # Los patrones ya están normalizados: minúsculas, sin acentos, palabras
@@ -64,7 +66,27 @@ MIN_LENGTH = 3
 UNKNOWN = "desconocido"
 
 
-def classify_intent(message: str) -> str:
+def _fold_and_separate(text: str) -> str:
+    """Fold case/accents and turn every non-alphanumeric run into one space."""
+    folded = unicodedata.normalize("NFKD", text.casefold())
+    characters = (
+        character if character.isalnum() else " "
+        for character in folded
+        if not unicodedata.combining(character)
+    )
+    return " ".join("".join(characters).split())
+
+
+def _normalize_message(message: str) -> str:
+    eligible_lines = [line for line in message.splitlines() if not line.startswith(">")]
+    return _fold_and_separate(" ".join(eligible_lines))
+
+
+def _normalize_pattern(pattern: str) -> str:
+    return _fold_and_separate(pattern)
+
+
+def classify_intent(message: str | None) -> str:
     """Devuelve la intención de un mensaje del usuario.
 
     Reglas que debe cumplir tu implementación:
@@ -90,7 +112,28 @@ def classify_intent(message: str) -> str:
     Returns:
         Una de las claves de `INTENTS`, o `UNKNOWN`.
     """
-    raise NotImplementedError("EJERCICIO 1")
+    if not message:
+        return UNKNOWN
+
+    normalized_message = _normalize_message(message)
+    if len(normalized_message) < MIN_LENGTH:
+        return UNKNOWN
+
+    searchable = f" {normalized_message} "
+    best_intent = UNKNOWN
+    best_length = -1
+
+    # Dict/list iteration order is the deterministic tie-breaker.
+    for intent, entry in INTENTS.items():
+        for pattern in entry.get("patterns", []):
+            normalized_pattern = _normalize_pattern(pattern)
+            if not normalized_pattern:
+                continue
+            if f" {normalized_pattern} " in searchable and len(normalized_pattern) > best_length:
+                best_intent = intent
+                best_length = len(normalized_pattern)
+
+    return best_intent
 
 
 def specialist_for(intent: str) -> str | None:
