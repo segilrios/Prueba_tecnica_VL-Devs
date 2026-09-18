@@ -11,9 +11,12 @@ directamente. Si tu lógica quedó atrapada dentro del handler HTTP, no vas a
 poder escribirlos, y eso ya es una señal sobre el diseño.
 """
 
+import json
+
 import pytest
 
-from app import UMBRAL_MINIMO, consultar
+import app
+from app import Handler, UMBRAL_MINIMO, consultar
 
 
 @pytest.mark.asyncio
@@ -41,3 +44,92 @@ async def test_pregunta_sin_evidencia_no_inventa_respuesta():
 
 
 # --- TUS TESTS AQUÍ ---
+
+
+@pytest.mark.asyncio
+async def test_consulta_tiene_forma_exacta_y_especialista_de_intencion():
+    result = await consultar("¿Cuántos días de garantía tiene el plan Pro?", "acme")
+
+    assert set(result) == {
+        "pregunta", "workspace", "intencion", "especialista", "fragmentos",
+        "veredicto", "motivo", "respuesta",
+    }
+    assert result["intencion"] == "facturacion"
+    assert result["especialista"] == "billing_agent"
+    assert all(
+        set(fragmento) == {"source_id", "titulo", "chunk", "texto", "similitud"}
+        for fragmento in result["fragmentos"]
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("score", "expected_verdict"),
+    [(0.55, "DUDOSO"), (0.75, "APROBADO")],
+)
+async def test_verdict_uses_exact_score_boundaries(monkeypatch, score, expected_verdict):
+    fragment = {
+        "source_id": "source", "titulo": "Title", "chunk": 0,
+        "texto": "Literal answer", "similitud": score,
+    }
+
+    async def fake_search(_question):
+        return [fragment]
+
+    monkeypatch.setattr(app, "search", fake_search)
+    result = await consultar("consulta de prueba", "acme")
+
+    assert result["veredicto"] == expected_verdict
+    assert result["respuesta"] == fragment["texto"]
+
+
+@pytest.mark.asyncio
+async def test_empty_and_no_overlap_questions_abstain_without_response():
+    empty = await consultar("", "acme")
+    no_overlap = await consultar("ornitorrinco cuántico", "acme")
+
+    for result in (empty, no_overlap):
+        assert result["veredicto"] == "SIN_EVIDENCIA"
+        assert result["respuesta"] is None
+        assert "0.55" in result["motivo"]
+
+
+@pytest.mark.asyncio
+async def test_response_is_the_literal_best_fragment_without_rewriting(monkeypatch):
+    fragment = {
+        "source_id": "source", "titulo": "Title", "chunk": 0,
+        "texto": "<em>Literal & unmodified</em>", "similitud": 0.80,
+    }
+
+    async def fake_search(_question):
+        return [fragment]
+
+    monkeypatch.setattr(app, "search", fake_search)
+    result = await consultar("consulta de prueba", "acme")
+
+    assert result["respuesta"] == "<em>Literal & unmodified</em>"
+
+
+@pytest.mark.asyncio
+async def test_missing_workspace_raises_clear_error():
+    with pytest.raises(KeyError, match="workspace no encontrado: missing"):
+        await consultar("consulta", "missing")
+
+
+def test_missing_workspace_is_a_deliberate_http_404():
+    handler = Handler.__new__(Handler)
+    handler.path = "/api/consulta?q=consulta&ws=missing"
+    responses = []
+    handler._send = lambda code, body, content_type: responses.append((code, body, content_type))
+
+    handler.do_GET()
+
+    assert responses[0][0] == 404
+    assert json.loads(responses[0][1])["error"] == "'workspace no encontrado: missing'"
+
+
+def test_page_renders_dynamic_markup_as_text_without_html_injection_sink():
+    assert "textContent" in app.PAGINA
+    assert "innerHTML" not in app.PAGINA
+    assert "addStage('5. Respuesta literal con evidencia', data.respuesta)" in app.PAGINA
+    assert "SIN_EVIDENCIA" in app.PAGINA

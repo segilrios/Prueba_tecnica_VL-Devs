@@ -22,6 +22,10 @@ import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from config.intents import classify_intent, specialist_for
+from shared.clients import get_db_client
+from shared.retriever import search
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger("consola")
 
@@ -73,7 +77,62 @@ async def consultar(pregunta: str, workspace_id: str = "acme") -> dict:
 
     El `motivo` lo lee un humano cuando algo sale raro: que diga números.
     """
-    raise NotImplementedError("EJERCICIO 6")
+    workspace = await get_db_client().table("workspaces").item(workspace_id).get()
+    if not workspace.exists:
+        raise KeyError(f"workspace no encontrado: {workspace_id}")
+
+    intencion = classify_intent(pregunta)
+    fragmentos = await search(pregunta)
+    fragmentos = [
+        {
+            "source_id": fragmento["source_id"],
+            "titulo": fragmento["titulo"],
+            "chunk": fragmento["chunk"],
+            "texto": fragmento["texto"],
+            "similitud": fragmento["similitud"],
+        }
+        for fragmento in fragmentos
+    ]
+
+    if not fragmentos:
+        veredicto = "SIN_EVIDENCIA"
+        motivo = f"No se recuperaron fragmentos; se requiere similitud mínima de {UMBRAL_MINIMO:.2f}."
+        respuesta = None
+    else:
+        mejor = fragmentos[0]
+        similitud = mejor["similitud"]
+        if similitud < UMBRAL_MINIMO:
+            veredicto = "SIN_EVIDENCIA"
+            motivo = (
+                f"Similitud {similitud:.2f}, por debajo del mínimo de "
+                f"{UMBRAL_MINIMO:.2f}."
+            )
+            respuesta = None
+        elif similitud < UMBRAL_ALTO:
+            veredicto = "DUDOSO"
+            motivo = (
+                f"Similitud {similitud:.2f}, entre el mínimo de {UMBRAL_MINIMO:.2f} "
+                f"y el umbral de aprobación de {UMBRAL_ALTO:.2f}; requiere revisión."
+            )
+            respuesta = mejor["texto"]
+        else:
+            veredicto = "APROBADO"
+            motivo = (
+                f"Similitud {similitud:.2f}, alcanza el umbral de aprobación de "
+                f"{UMBRAL_ALTO:.2f}."
+            )
+            respuesta = mejor["texto"]
+
+    return {
+        "pregunta": pregunta,
+        "workspace": workspace_id,
+        "intencion": intencion,
+        "especialista": specialist_for(intencion),
+        "fragmentos": fragmentos,
+        "veredicto": veredicto,
+        "motivo": motivo,
+        "respuesta": respuesta,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +158,11 @@ PAGINA = """<!doctype html>
          padding: 0 20px; color: #1a2330; }
   input[type=text] { width: 100%; padding: 10px; font-size: 16px; }
   button { padding: 10px 18px; font-size: 15px; cursor: pointer; }
-  pre { background: #f2f4f7; padding: 14px; overflow-x: auto; white-space: pre-wrap; }
+  #out { background: #f2f4f7; padding: 14px; }
+  .stage { border-bottom: 1px solid #d8dee8; padding: 10px 0; }
+  .stage:last-child { border-bottom: 0; }
+  .status { font-weight: 700; }
+  .abstention { border: 3px solid #202938; font-size: 1.2rem; padding: 14px; }
 </style>
 </head><body>
   <h1>Consola del Asistente</h1>
@@ -116,8 +179,7 @@ PAGINA = """<!doctype html>
     </p>
   </form>
 
-  <!-- TODO: reemplaza este volcado por algo legible -->
-  <pre id="out">Escribe una pregunta para empezar.</pre>
+  <main id="out" aria-live="polite">Escribe una pregunta para empezar.</main>
 
 <script>
 document.getElementById('f').onsubmit = async (e) => {
@@ -129,7 +191,26 @@ document.getElementById('f').onsubmit = async (e) => {
   try {
     const r = await fetch(`/api/consulta?q=${encodeURIComponent(q)}&ws=${ws}`);
     const data = await r.json();
-    out.textContent = JSON.stringify(data, null, 2);
+    out.textContent = '';
+    const addStage = (title, value, className = '') => {
+      const stage = document.createElement('section');
+      stage.className = `stage ${className}`;
+      const heading = document.createElement('strong');
+      heading.textContent = title;
+      const detail = document.createElement('p');
+      detail.textContent = value;
+      stage.append(heading, detail);
+      out.append(stage);
+    };
+    addStage('1. Pregunta', data.pregunta);
+    addStage('2. Clasificación', `${data.intencion} → ${data.especialista || 'sin especialista'}`);
+    addStage('3. Recuperación', `${data.fragmentos.length} fragmento(s) recuperado(s)`);
+    const symbol = data.veredicto === 'APROBADO' ? '✓' : data.veredicto === 'DUDOSO' ? '!' : '✕';
+    const statusClass = data.veredicto === 'SIN_EVIDENCIA' ? 'abstention' : 'status';
+    addStage(`4. ${symbol} ${data.veredicto}`, data.motivo, statusClass);
+    if (data.respuesta !== null) {
+      addStage('5. Respuesta literal con evidencia', data.respuesta);
+    }
   } catch (err) {
     out.textContent = 'Error: ' + err;
   }
@@ -166,6 +247,10 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 data = asyncio.run(consultar(pregunta, workspace))
                 return self._send(200, json.dumps(data, ensure_ascii=False), "application/json")
+            except KeyError as exc:
+                return self._send(
+                    404, json.dumps({"error": str(exc)}, ensure_ascii=False),
+                    "application/json")
             except NotImplementedError as exc:
                 return self._send(
                     501, json.dumps({"error": str(exc)}, ensure_ascii=False),
