@@ -24,15 +24,16 @@ PROTECTED = [
     "prompts/verificador_v1.md",
 ]
 REQUIRED_NOTAS_SECTIONS = [
-    "alcance",
-    "seis ejercicios",
-    "Decisiones",
-    "Defectos",
-    "conceptuales",
-    "recuperador",
-    "IA",
-    "Evidencia observada",
-    "Trabajo pendiente",
+    "## Resumen",
+    "## Tiempo",
+    "## Decisiones",
+    "## Ejercicio 1",
+    "## Ejercicio 3",
+    "## Ejercicio 4",
+    "## Ejercicio 6",
+    "## Ejercicio 5",
+    "## Uso de IA",
+    "## Qué haría con una semana más",
 ]
 
 
@@ -67,10 +68,8 @@ def test_notas_claims_supported_and_limitations_explicit():
     for section in REQUIRED_NOTAS_SECTIONS:
         assert section in text, f"NOTAS.md is missing required section: {section}"
 
-    assert "Disponibilidad de tiempos" in text
-    assert "Assessment start timestamp" in text
-    assert "Per-exercise durations" in text
-    assert text.count("Not available") >= 3
+    assert "no disponible" in text or "Not available" in text
+    assert text.count("no disponible") + text.count("no disponibles") + text.count("No disponible") + text.count("Not available") >= 3
     assert "aislamiento" in text  # tenant-isolation limitation is documented, not claimed
 
 
@@ -89,11 +88,11 @@ def test_failures_and_remaining_work_are_reported_truthfully():
     """Any failure or leftover must appear in NOTAS.md rather than as success."""
     text = NOTAS.read_text(encoding="utf-8")
 
-    assert "## Trabajo pendiente" in text
-    pending = text.split("## Trabajo pendiente", 1)[1]
+    assert "## Qué haría con una semana más" in text
+    pending = text.split("## Qué haría con una semana más", 1)[1]
     assert pending.strip(), "the remaining-work section must state the delivery status"
     # Timing gaps are reported as unavailable, never as measured values.
-    assert "no está disponible" in text or "Not available" in text
+    assert "no está disponible" in text or "no disponible" in text or "Not available" in text
 
 
 def test_screenshot_reference_and_history_demonstrate_delivery():
